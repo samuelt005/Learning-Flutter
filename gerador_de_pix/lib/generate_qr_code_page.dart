@@ -41,39 +41,46 @@ class _GenerateQrCodePageState extends State<GenerateQrCodePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              controller: _pixController,
-              decoration: const InputDecoration(
-                labelText: 'Valor do Pix',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.monetization_on),
+            SizedBox(
+              width: 200,
+              child: TextField(
+                controller: _pixController,
+                decoration: const InputDecoration(
+                  labelText: 'Valor do Pix',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.monetization_on),
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+,?\d*$')),
+                ],
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+,?\d*$')),
-              ],
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton(
-                  onPressed: () => _setAndGenerateQrCode(1.00),
-                  child: const Text('1,00'),
-                ),
-                ElevatedButton(
-                  onPressed: () => _setAndGenerateQrCode(5.00),
-                  child: const Text('5,00'),
-                ),
-                ElevatedButton(
-                  onPressed: () => _setAndGenerateQrCode(10.00),
-                  child: const Text('10,00'),
-                ),
-                ElevatedButton(
-                  onPressed: () => _setAndGenerateQrCode(50.00),
-                  child: const Text('50,00'),
-                ),
-              ],
+            SizedBox(
+              width: 300,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => _setAndGenerateQrCode(1.00),
+                    child: const Text('1,00'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => _setAndGenerateQrCode(5.00),
+                    child: const Text('5,00'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => _setAndGenerateQrCode(10.00),
+                    child: const Text('10,00'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => _setAndGenerateQrCode(50.00),
+                    child: const Text('50,00'),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             Align(
@@ -87,8 +94,10 @@ class _GenerateQrCodePageState extends State<GenerateQrCodePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            Expanded(
+            const SizedBox(height: 32),
+            SizedBox(
+              width: 200,
+              height: 200,
               child: Center(
                 child: _qrData != null
                     ? QrImageView(
@@ -97,6 +106,36 @@ class _GenerateQrCodePageState extends State<GenerateQrCodePage> {
                         backgroundColor: Colors.white,
                       )
                     : const Text('Nenhum código gerado ainda'),
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: 200,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: TextEditingController(text: _qrData),
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 8.0),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: _qrData ?? ''));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Texto copiado para a área de transferência'),
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ],
