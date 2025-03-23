@@ -1,135 +1,155 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import 'dart:math';
 
 void main() {
-  runApp(MaterialApp(home: PasswordGeneratorApp()));
+  runApp(PasswordGeneratorApp());
 }
 
-class PasswordGeneratorApp extends StatefulWidget {
-  const PasswordGeneratorApp({super.key});
+class PasswordGeneratorApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: PasswordGeneratorScreen(),
+    );
+  }
+}
+
+class PasswordGeneratorScreen extends StatefulWidget {
+  const PasswordGeneratorScreen({super.key});
 
   @override
-  _PasswordGeneratorAppState createState() => _PasswordGeneratorAppState();
+  _PasswordGeneratorScreenState createState() {
+    return _PasswordGeneratorScreenState();
+  }
 }
 
-class _PasswordGeneratorAppState extends State<PasswordGeneratorApp> {
-  final List<String> _generatedPasswords = [];
+class _PasswordGeneratorScreenState extends State<PasswordGeneratorScreen> {
+  Database? _database;
+  List<String> _passwords = [];
 
-  int _length = 12;
-  int _letters = 4;
-  int _numbers = 4;
-  int _specialChars = 4;
+  int length = 12;
+  int letters = 6;
+  int numbers = 3;
+  int specials = 3;
 
-  final _lettersSet = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  final _numbersSet = '0123456789';
-  final _specialCharsSet = '!@#\$%^&*()_+{}|<>?~';
-
-  String _generatePassword() {
-    final random = Random();
-
-    String password = '';
-
-    password +=
-        List.generate(
-          _letters,
-          (index) => _lettersSet[random.nextInt(_lettersSet.length)],
-        ).join();
-    password +=
-        List.generate(
-          _numbers,
-          (index) => _numbersSet[random.nextInt(_numbersSet.length)],
-        ).join();
-    password +=
-        List.generate(
-          _specialChars,
-          (index) => _specialCharsSet[random.nextInt(_specialCharsSet.length)],
-        ).join();
-
-    return String.fromCharCodes(password.runes.toList()..shuffle(random));
+  @override
+  void initState() {
+    super.initState();
+    _initDatabase();
   }
 
-  void _addPassword() {
-    final password = _generatePassword();
+  Future<void> _initDatabase() async {
+    _database = await openDatabase(
+      join(await getDatabasesPath(), 'passwords.db'),
+      onCreate: (db, version) {
+        return db.execute('CREATE TABLE passwords(id INTEGER PRIMARY KEY, password TEXT)');
+      },
+      version: 1,
+    );
+    _loadPasswords();
+  }
+
+  Future<void> _loadPasswords() async {
+    final List<Map<String, dynamic>> maps = await _database!.query('passwords');
     setState(() {
-      _generatedPasswords.add(password);
+      _passwords = List.generate(maps.length, (i) => maps[i]['password']);
     });
+  }
+
+  String _generatePassword() {
+    const lettersChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const numbersChars = "0123456789";
+    const specialChars = "!@#\$%^&*()_+";
+
+    String allChars = (letters > 0 ? lettersChars : '') +
+        (numbers > 0 ? numbersChars : '') +
+        (specials > 0 ? specialChars : '');
+
+    if (allChars.isEmpty) return '';
+
+    List<String> password = [];
+    Random rnd = Random();
+
+    password.addAll(List.generate(letters, (index) => lettersChars[rnd.nextInt(lettersChars.length)]));
+    password.addAll(List.generate(numbers, (index) => numbersChars[rnd.nextInt(numbersChars.length)]));
+    password.addAll(List.generate(specials, (index) => specialChars[rnd.nextInt(specialChars.length)]));
+
+    password.shuffle();
+
+    return password.join();
+  }
+
+  Future<void> _savePassword() async {
+    String newPassword = _generatePassword();
+    if (newPassword.isEmpty) return;
+
+    await _database!.insert(
+      'passwords',
+      {'password': newPassword},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _loadPasswords();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Gerador de Senhas")),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSlider(
-              "Comprimento",
-              _length,
-              8,
-              32,
-              (value) => setState(() => _length = value.toInt()),
+      appBar: AppBar(title: Text('Gerador de Senhas')),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              children: [
+                Text('Comprimento da Senha: $length'),
+                Slider(
+                  min: 6,
+                  max: 20,
+                  value: length.toDouble(),
+                  onChanged: (value) => setState(() => length = value.toInt()),
+                ),
+                Text('Letras: $letters'),
+                Slider(
+                  min: 0,
+                  max: length.toDouble(),
+                  value: letters.toDouble(),
+                  onChanged: (value) => setState(() => letters = value.toInt()),
+                ),
+                Text('Números: $numbers'),
+                Slider(
+                  min: 0,
+                  max: length.toDouble(),
+                  value: numbers.toDouble(),
+                  onChanged: (value) => setState(() => numbers = value.toInt()),
+                ),
+                Text('Especiais: $specials'),
+                Slider(
+                  min: 0,
+                  max: length.toDouble(),
+                  value: specials.toDouble(),
+                  onChanged: (value) => setState(() => specials = value.toInt()),
+                ),
+                ElevatedButton(
+                  onPressed: _savePassword,
+                  child: Text('Gerar e Salvar Senha'),
+                ),
+              ],
             ),
-            _buildSlider(
-              "Letras",
-              _letters,
-              0,
-              _length,
-              (value) => setState(() => _letters = value.toInt()),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _passwords.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  title: Text(_passwords[index]),
+                );
+              },
             ),
-            _buildSlider(
-              "Números",
-              _numbers,
-              0,
-              _length,
-              (value) => setState(() => _numbers = value.toInt()),
-            ),
-            _buildSlider(
-              "Caracteres Especiais",
-              _specialChars,
-              0,
-              _length,
-              (value) => setState(() => _specialChars = value.toInt()),
-            ),
-            ElevatedButton(onPressed: _addPassword, child: Text("Gerar Senha")),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _generatedPasswords.length,
-                itemBuilder:
-                    (context, index) => ListTile(
-                      title: Text(
-                        _generatedPasswords[index],
-                        style: TextStyle(fontFamily: 'monospace'),
-                      ),
-                    ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildSlider(
-    String label,
-    int value,
-    int min,
-    int max,
-    Function(double) onChanged,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("$label: $value"),
-        Slider(
-          value: value.toDouble(),
-          min: min.toDouble(),
-          max: max.toDouble(),
-          divisions: max - min,
-          onChanged: onChanged,
-        ),
-      ],
     );
   }
 }
