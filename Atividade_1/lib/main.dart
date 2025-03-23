@@ -8,6 +8,8 @@ void main() {
 }
 
 class PasswordGeneratorApp extends StatelessWidget {
+  const PasswordGeneratorApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
