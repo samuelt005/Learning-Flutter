@@ -36,7 +36,7 @@ class _ChatPageState extends State<ChatPage> {
   late types.User me;
 
   // Using ImgBB as the free storage service
-  final String imgbbApiKey = '12bde51caaf83ad467c767ac7158f028';
+  final String imgbbApiKey = 'YOUR_API_KEY';
 
   @override
   void initState() {
