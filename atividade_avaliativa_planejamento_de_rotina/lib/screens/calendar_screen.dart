@@ -382,7 +382,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               IconButton(
                                 icon: Icon(
                                   Icons.edit_outlined,
-                                  color: Theme.of(context).primaryColor,
+                                  color: Theme.of(context).secondaryHeaderColor,
                                   size: 20,
                                 ),
                                 tooltip: 'Editar',
