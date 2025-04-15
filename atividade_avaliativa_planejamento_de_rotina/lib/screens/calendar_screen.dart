@@ -63,28 +63,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
   }
 
-  List<Activity> _getActivitiesForDay(DateTime day) {
-    final key = _getDateKey(day);
-    return _activitiesByDate[key] ?? [];
-  }
-
-  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
-    final dayOnly = DateTime.utc(
-      selectedDay.year,
-      selectedDay.month,
-      selectedDay.day,
+  Future<void> _showActivityDialog({Activity? activityToEdit}) async {
+    final bool isEditing = activityToEdit != null;
+    final descController = TextEditingController(
+      text: activityToEdit?.description ?? '',
     );
-    if (!isSameDay(_selectedDay, dayOnly)) {
-      setState(() {
-        _selectedDay = dayOnly;
-        _focusedDay = focusedDay;
-      });
-    }
-  }
-
-  Future<void> _showAddActivityDialog() async {
-    final descController = TextEditingController();
-    TimeOfDay? selectedTime;
+    TimeOfDay? selectedTime =
+    activityToEdit != null
+        ? TimeOfDay.fromDateTime(DateTime.parse(activityToEdit.time))
+        : null;
 
     await showDialog(
       context: context,
@@ -92,9 +79,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             Future<void> pickTime() async {
+              final initialTime = selectedTime ?? TimeOfDay.now();
               final picked = await showTimePicker(
                 context: context,
-                initialTime: TimeOfDay.now(),
+                initialTime: initialTime,
                 builder: (context, child) {
                   return MediaQuery(
                     data: MediaQuery.of(
@@ -111,7 +99,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               }
             }
 
-            Future<void> addActivity() async {
+            Future<void> saveActivity() async {
               if (selectedTime == null || descController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -131,23 +119,53 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 selectedTime!.minute,
               );
 
-              final newActivity = Activity(
-                time: activityDateTime.toIso8601String(),
-                description: descController.text,
-              );
+              final newDescription = descController.text;
+              final newTime = activityDateTime.toIso8601String();
 
               try {
-                final all = await _storageService.loadActivities();
-                all.add(newActivity);
-                await _storageService.saveActivities(all);
+                final allActivities = await _storageService.loadActivities();
+                if (isEditing) {
+                  final index = allActivities.indexWhere(
+                        (a) =>
+                    a.time == activityToEdit.time &&
+                        a.description == activityToEdit.description,
+                  );
+                  if (index != -1) {
+                    allActivities[index] = Activity(
+                      time: newTime,
+                      description: newDescription,
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Erro: Atividade original não encontrada para editar.',
+                        ),
+                      ),
+                    );
+                    Navigator.of(context).pop();
+                    return;
+                  }
+                } else {
+                  final newActivity = Activity(
+                    time: newTime,
+                    description: newDescription,
+                  );
+                  allActivities.add(newActivity);
+                }
+
+                await _storageService.saveActivities(allActivities);
 
                 Navigator.of(context).pop();
-
                 await _loadActivities();
 
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Atividade adicionada com sucesso!'),
+                  SnackBar(
+                    content: Text(
+                      isEditing
+                          ? 'Atividade atualizada com sucesso!'
+                          : 'Atividade adicionada com sucesso!',
+                    ),
                   ),
                 );
               } catch (e) {
@@ -160,9 +178,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
             final localizations = MaterialLocalizations.of(context);
             final formattedDate = localizations.formatShortDate(_selectedDay);
+            final dialogTitle =
+            isEditing
+                ? 'Editar Atividade'
+                : 'Adicionar Atividade para $formattedDate';
+            final saveButtonText = isEditing ? 'Salvar' : 'Adicionar';
 
             return AlertDialog(
-              title: Text('Adicionar Atividade para $formattedDate'),
+              title: Text(dialogTitle),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -174,9 +197,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         selectedTime == null
                             ? 'Selecionar Hora'
                             : localizations.formatTimeOfDay(
-                              selectedTime!,
-                              alwaysUse24HourFormat: true,
-                            ),
+                          selectedTime!,
+                          alwaysUse24HourFormat: true,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -187,6 +210,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         border: OutlineInputBorder(),
                       ),
                       textCapitalization: TextCapitalization.sentences,
+                      maxLines: null,
                     ),
                   ],
                 ),
@@ -197,8 +221,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: addActivity,
-                  child: const Text('Adicionar'),
+                  onPressed: saveActivity,
+                  child: Text(saveButtonText),
                 ),
               ],
             );
@@ -210,13 +234,79 @@ class _CalendarScreenState extends State<CalendarScreen> {
     descController.dispose();
   }
 
+  Future<void> _deleteActivity(Activity activityToDelete) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+        title: const Text('Confirmar Exclusão'),
+        content: Text(
+          'Tem certeza que deseja excluir a atividade "${activityToDelete.description}"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final allActivities = await _storageService.loadActivities();
+        allActivities.removeWhere(
+              (a) =>
+          a.time == activityToDelete.time &&
+              a.description == activityToDelete.description,
+        );
+        await _storageService.saveActivities(allActivities);
+        await _loadActivities();
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Atividade excluída.')));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao excluir atividade: $e')),
+          );
+        }
+      }
+    }
+  }
+
+  List<Activity> _getActivitiesForDay(DateTime day) {
+    final key = _getDateKey(day);
+    return _activitiesByDate[key] ?? [];
+  }
+
+  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    final dayOnly = DateTime.utc(
+      selectedDay.year,
+      selectedDay.month,
+      selectedDay.day,
+    );
+    if (!isSameDay(_selectedDay, dayOnly)) {
+      setState(() {
+        _selectedDay = dayOnly;
+        _focusedDay = focusedDay;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final localizations = MaterialLocalizations.of(context);
     final activitiesForSelectedDay = _getActivitiesForDay(_selectedDay);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Planejador Diário')),
+      appBar: AppBar(title: const Text('Planejamento Diário')),
       body: Column(
         children: [
           TableCalendar<Activity>(
@@ -242,16 +332,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
               outsideDaysVisible: false,
             ),
-            availableCalendarFormats: const {
-              CalendarFormat.month: 'Mês',
-            },
+            availableCalendarFormats: const {CalendarFormat.month: 'Mês'},
             headerStyle: const HeaderStyle(
               formatButtonVisible: true,
               titleCentered: true,
             ),
             onDaySelected: _onDaySelected,
             onPageChanged: (focusedDay) {
-              _focusedDay = focusedDay;
+              setState(() {
+                _focusedDay = focusedDay;
+              });
             },
           ),
           const Divider(height: 1, thickness: 1),
@@ -262,9 +352,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
             child: Text(
               "Atividades para ${localizations.formatFullDate(_selectedDay)}:",
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(
@@ -286,14 +376,32 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           title: Text(activity.description),
                           subtitle: Text("Hora: $time"),
                           dense: true,
-                          trailing: IconButton(
-                            icon: Icon(
-                              Icons.delete_outline,
-                              color: Colors.redAccent,
-                            ),
-                            onPressed: () {
-                              _deleteActivity(activity);
-                            },
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  Icons.edit_outlined,
+                                  color: Theme.of(context).primaryColor,
+                                  size: 20,
+                                ),
+                                tooltip: 'Editar',
+                                onPressed: () {
+                                  _showActivityDialog(activityToEdit: activity);
+                                },
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.redAccent,
+                                  size: 20,
+                                ),
+                                tooltip: 'Excluir',
+                                onPressed: () {
+                                  _deleteActivity(activity);
+                                },
+                              ),
+                            ],
                           ),
                         );
                       },
@@ -302,40 +410,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddActivityDialog,
+        onPressed: () => _showActivityDialog(),
         tooltip: 'Adicionar Atividade',
         child: const Icon(Icons.add),
       ),
     );
-  }
-
-  Future<void> _deleteActivity(Activity activityToDelete) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar Exclusão'),
-        content: Text('Tem certeza que deseja excluir a atividade "${activityToDelete.description}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
-          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Excluir')),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        final allActivities = await _storageService.loadActivities();
-        allActivities.removeWhere((a) => a.time == activityToDelete.time && a.description == activityToDelete.description);
-        await _storageService.saveActivities(allActivities);
-        await _loadActivities();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Atividade excluída.')),
-        );
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao excluir atividade: $e')),
-        );
-      }
-    }
   }
 }
