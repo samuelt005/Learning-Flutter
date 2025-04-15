@@ -10,7 +10,7 @@ class PlannerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Planejador Diário',
+      title: 'Planejamento Diário',
       theme: ThemeData(primarySwatch: Colors.indigo),
       home: PlannerHome(),
     );
@@ -21,10 +21,10 @@ class PlannerHome extends StatefulWidget {
   const PlannerHome({super.key});
 
   @override
-  _PlannerHomeState createState() => _PlannerHomeState();
+  PlannerHomeState createState() => PlannerHomeState();
 }
 
-class _PlannerHomeState extends State<PlannerHome> {
+class PlannerHomeState extends State<PlannerHome> {
   final StorageService _storageService = StorageService();
   List<Activity> _activities = [];
 
@@ -70,14 +70,14 @@ class _PlannerHomeState extends State<PlannerHome> {
       lastDate: DateTime(2100),
     );
 
-    if (date == null) return;
+    if (!mounted || date == null) return;
 
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
     );
 
-    if (time == null) return;
+    if (!mounted || time == null) return;
 
     setState(() {
       _selectedDateTime = DateTime(
