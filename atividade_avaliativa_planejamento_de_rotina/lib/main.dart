@@ -28,7 +28,7 @@ class _PlannerHomeState extends State<PlannerHome> {
   final StorageService _storageService = StorageService();
   List<Activity> _activities = [];
 
-  final _timeController = TextEditingController();
+  DateTime? _selectedDateTime;
   final _descController = TextEditingController();
 
   @override
@@ -45,21 +45,49 @@ class _PlannerHomeState extends State<PlannerHome> {
   }
 
   Future<void> _addActivity() async {
-    if (_timeController.text.isEmpty || _descController.text.isEmpty) return;
+    if (_selectedDateTime == null || _descController.text.isEmpty) return;
 
     final newActivity = Activity(
-      time: _timeController.text,
+      time: _selectedDateTime!.toIso8601String(),
       description: _descController.text,
     );
 
     setState(() {
       _activities.add(newActivity);
+      _selectedDateTime = null;
     });
 
     await _storageService.saveActivities(_activities);
 
-    _timeController.clear();
     _descController.clear();
+  }
+
+  Future<void> _pickDateTime() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+
+    if (date == null) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (time == null) return;
+
+    setState(() {
+      _selectedDateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
   }
 
   @override
@@ -70,9 +98,16 @@ class _PlannerHomeState extends State<PlannerHome> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            TextField(
-              controller: _timeController,
-              decoration: InputDecoration(labelText: 'Horário (ex: 08:00)'),
+            ElevatedButton(
+              onPressed: _pickDateTime,
+              child: Text(
+                _selectedDateTime == null
+                    ? 'Selecionar Data e Hora'
+                    : '${_selectedDateTime!.day.toString().padLeft(2, '0')}/'
+                        '${_selectedDateTime!.month.toString().padLeft(2, '0')} '
+                        '${_selectedDateTime!.hour.toString().padLeft(2, '0')}:'
+                        '${_selectedDateTime!.minute.toString().padLeft(2, '0')}',
+              ),
             ),
             TextField(
               controller: _descController,
@@ -94,7 +129,11 @@ class _PlannerHomeState extends State<PlannerHome> {
                           final activity = _activities[index];
                           return ListTile(
                             title: Text(
-                              '${activity.time} - ${activity.description}',
+                              '${DateTime.parse(activity.time).day.toString().padLeft(2, '0')}/'
+                              '${DateTime.parse(activity.time).month.toString().padLeft(2, '0')} '
+                              '${DateTime.parse(activity.time).hour.toString().padLeft(2, '0')}:'
+                              '${DateTime.parse(activity.time).minute.toString().padLeft(2, '0')}'
+                              ' - ${activity.description}',
                             ),
                           );
                         },
