@@ -1,4 +1,3 @@
-// models/activity.dart
 class Activity {
   final String time;
   final String description;
